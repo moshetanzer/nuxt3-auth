@@ -1,5 +1,6 @@
 export default defineNuxtConfig({
   modules: ['@nuxt/eslint'],
+  ssr: true,
   devtools: { enabled: false },
   runtimeConfig: {
     authDb: ''

@@ -3,6 +3,8 @@ async function logOut() {
   await $fetch('/api/auth/signout', {
     method: 'POST'
   })
+  const user = useUser()
+  user.value = null
   navigateTo('/')
 }
 onMounted(() => {
