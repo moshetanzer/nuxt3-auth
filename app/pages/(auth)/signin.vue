@@ -1,4 +1,7 @@
 <script setup lang="ts">
+definePageMeta({
+  middleware: ['signin']
+})
 const email = ref('')
 const password = ref('')
 const error = ref('')
@@ -13,7 +16,7 @@ async function signIn() {
   if (response.error) {
     error.value = response.error
   } else {
-    navigateTo('/dashboard')
+    navigateTo('/')
   }
 }
 </script>

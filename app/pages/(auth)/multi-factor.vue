@@ -11,7 +11,7 @@ async function verify() {
   if (response.error) {
     error.value = response.error
   } else {
-    navigateTo('/dashboard')
+    navigateTo('/')
   }
 }
 </script>
