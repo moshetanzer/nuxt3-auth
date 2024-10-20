@@ -4,16 +4,25 @@ definePageMeta({
 })
 const email = ref('')
 const password = ref('')
-const error = ref('')
+const status = ref('')
+
 async function signIn() {
-  await $fetch('/api/auth/signin', {
-    method: 'POST',
-    body: {
-      email: email.value,
-      password: password.value
+  try {
+    await $fetch('/api/auth/signin', {
+      method: 'POST',
+      body: {
+        email: email.value,
+        password: password.value
+      }
+    })
+    navigateTo('/')
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      status.value = error.message
+    } else {
+      status.value = 'Unknown error'
     }
-  })
-  navigateTo('/')
+  }
 }
 </script>
 
@@ -26,6 +35,7 @@ async function signIn() {
         id="email"
         v-model="email"
         type="email"
+        autocomplete="username"
         name="email"
       >
       <label for="password">Password</label>
@@ -33,8 +43,11 @@ async function signIn() {
         id="password"
         v-model="password"
         type="password"
+        autocomplete="current-password"
         name="password"
       >
+      <div>{{ status }}</div>
+
       <button type="submit">
         Sign In
       </button>
