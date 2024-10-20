@@ -1,15 +1,20 @@
-export defineEventHandler(async (event) => {
-    const body = await readBody(event);
-    const { email, password } = body;
+export default defineEventHandler(async (event) => {
+  const body = await readBody(event)
 
-    const user = await authenticateUser(email, password);
+  if (!body.email || !body.password) {
+    return createError({
+      statusCode: 400,
+      statusMessage: 'Missing email or password'
+    })
+  }
 
-    if (!user) {
-        createError({
-            statusCode: 401,
-            statusMessage: 'Invalid email or password'
-        })
-    }
+  const user = await authenticateUser(body.email, body.password)
+  if (!user) {
+    return createError({
+      statusCode: 401,
+      statusMessage: 'Invalid email or password'
+    })
+  }
 
-    return user
+  await createSession(event, user.id)
 })

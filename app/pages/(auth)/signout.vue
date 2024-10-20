@@ -1,6 +1,9 @@
 <script setup lang="ts">
 async function logOut() {
-  console.log('log out')
+  await $fetch('/api/auth/signout', {
+    method: 'POST'
+  })
+  navigateTo('/')
 }
 onMounted(() => {
   logOut()

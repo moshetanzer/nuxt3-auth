@@ -1,5 +1,20 @@
 import crypto from 'crypto'
 import argon2 from 'argon2'
+import type { H3Event } from 'h3'
+import pg from 'pg'
+
+interface User {
+  id: string
+  email: string
+  fname: string
+  lname: string
+  failed_attempts: number
+}
+const { Pool } = pg
+const connectionString = useRuntimeConfig().authDb
+const authDB = new Pool({
+  connectionString
+})
 
 export function generateRandomId(length = 15) {
   return crypto.randomBytes(Math.ceil(length / 2))
@@ -22,27 +37,43 @@ async function verifyPassword(password: string, hash: string) {
   try {
     return await argon2.verify(hash, password)
   } catch (error) {
+    console.log(error)
     return false
   }
 }
 
+/**
+ * Checks if the user with the given email address has 5 failed login attempts,
+ * in which case the account is considered locked.
+ * @param {string} email The email address of the user to check.
+ * @returns {Promise<boolean>} A promise that resolves to true if the account is locked, false otherwise.
+ */
 async function checkIfLocked(email: string) {
-  const result = await authDB.query(`SELECT email, failed_attempts FROM users WHERE email = $1`, [email])
-  if (result.rows.failed_attempts >= 5) {
+  const result = await authDB.query<User>(`SELECT email, failed_attempts FROM users WHERE email = $1`, [email])
+  if (result.rows[0].failed_attempts >= 5) {
     return true
   } else {
     return false
   }
 }
 
+/**
+ * Increments the failed login attempts for a user.
+ * @param {string} email The email address of the user.
+ */
 async function incrementFailedAttempts(email: string) {
   await authDB.query(`UPDATE users SET failed_attempts = failed_attempts + 1 WHERE email = $1`, [email])
 }
 
+/**
+ * Resets the failed login attempts for a user.
+ * @param {string} email The email address of the user.
+ */
 async function resetFailedAttempts(email: string) {
   await authDB.query(`UPDATE users SET failed_attempts = 0 WHERE email = $1`, [email])
 }
-export async function createSession(userId: string) {
+
+export async function createSession(event: H3Event, userId: string) {
   const sessionId = generateRandomId(30)
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
 
@@ -51,20 +82,24 @@ export async function createSession(userId: string) {
       VALUES ($1, $2, $3)
       RETURNING id
     `
-
   const values = [sessionId, userId, expiresAt]
+  await authDB.query(query, values)
 
-  const result = await authDB.query(query, values)
-  return result.rows[0].id
+  setCookie(event, 'sessionId', sessionId, {
+    path: '/',
+    maxAge: 60 * 60 * 24 * 30,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: true
+  })
 }
-
 export async function verifySession(sessionId: string) {
   const query = `
-      SELECT s.*, u.role
-      FROM sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.id = $1 AND s.expires_at > NOW()
-    `
+            SELECT s.*, u.role, u.fname, u.lname, u.email
+            FROM sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.id = $1 AND s.expires_at > NOW()
+          `
 
   const result = await authDB.query(query, [sessionId])
 
@@ -72,7 +107,20 @@ export async function verifySession(sessionId: string) {
     return null
   }
 
-  return result.rows[0]
+  const session = {
+    id: result.rows[0].id,
+    user_id: result.rows[0].user_id,
+    expires_at: result.rows[0].expires_at
+  }
+
+  const user = {
+    role: result.rows[0].role,
+    fname: result.rows[0].fname,
+    lname: result.rows[0].lname,
+    email: result.rows[0].email
+  }
+
+  return { session, user }
 }
 
 export async function deleteSession(sessionId: string) {
@@ -126,6 +174,41 @@ export async function createUser(fname: string, lname: string, email: string, pa
   return result.rows[0].id
 }
 
-export async function auditLogger(email: string, action: string, message: string, ip: string, userAgent: string, status: string) {
-  await authDB.query(`INSERT INTO audit_logs(email, action, message, ip) VALUES($1, $2, $3, $4)`, [email, action, message, ip])
+// export async function auditLogger(email: string, action: string, message: string, ip: string, userAgent: string, status: string) {
+//   await authDB.query(`INSERT INTO audit_logs(email, action, message, ip) VALUES($1, $2, $3, $4)`, [email, action, message, ip])
+// }
+export function verifyRequestOrigin(origin: string, allowedDomains: string[]): boolean {
+  if (!origin || allowedDomains.length === 0) return false
+  const originHost = safeURL(origin)?.host ?? null
+  if (!originHost) return false
+  for (const domain of allowedDomains) {
+    let host: string | null
+    if (domain.startsWith('http://') || domain.startsWith('https://')) {
+      host = safeURL(domain)?.host ?? null
+    } else {
+      host = safeURL('https://' + domain)?.host ?? null
+    }
+    if (originHost === host) return true
+  }
+  return false
+}
+
+function safeURL(url: URL | string): URL | null {
+  try {
+    return new URL(url)
+  } catch {
+    return null
+  }
+}
+
+export async function refreshSession(sessionId: string) {
+  const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
+  const query = 'UPDATE sessions SET expires_at = $1 WHERE id = $2 RETURNING *'
+  const result = await authDB.query(query, [newExpiresAt, sessionId])
+  return result.rows[0]
+}
+
+export async function cleanupExpiredSessions() {
+  const query = 'DELETE FROM sessions WHERE expires_at < NOW()'
+  await authDB.query(query)
 }

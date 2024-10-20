@@ -1,13 +1,13 @@
 export default defineNuxtConfig({
+  modules: ['@nuxt/eslint'],
+  devtools: { enabled: false },
   runtimeConfig: {
     authDb: ''
   },
-  compatibilityDate: '2024-04-03',
-  future :{
+  future: {
     compatibilityVersion: 4
   },
-  devtools: { enabled: true },
-  modules: ['@nuxt/eslint'],
+  compatibilityDate: '2024-04-03',
   eslint: {
     config: {
       stylistic: {
