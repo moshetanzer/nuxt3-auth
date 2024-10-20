@@ -7,19 +7,24 @@ const confirmPassword = ref('')
 const status = ref('')
 
 async function signUp() {
-  const response = await $fetch('/api/auth/signup', {
-    method: 'POST',
-    body: {
-      fname: fname.value,
-      lname: lname.value,
-      email: email.value,
-      password: password.value
+  try {
+    await $fetch('/api/auth/signup', {
+      method: 'POST',
+      body: {
+        fname: fname.value,
+        lname: lname.value,
+        email: email.value,
+        password: password.value,
+        confirmPassword: confirmPassword.value
+      }
+    })
+    status.value = 'Account created. Please sign in.'
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      status.value = error.message
+    } else {
+      status.value = 'Unknown error'
     }
-  })
-  if (response.error) {
-    status.value = response.error
-  } else {
-    status.value = 'Account created. Please login.'
   }
 }
 </script>
