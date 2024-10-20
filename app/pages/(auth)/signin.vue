@@ -6,14 +6,18 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 async function signIn() {
-  await $fetch('/api/auth/signin', {
+  const response = await $fetch('/api/auth/signin', {
     method: 'POST',
     body: {
       email: email.value,
       password: password.value
     }
   })
-  navigateTo('/')
+  if (response && response.statusCode !== 200) {
+    error.value = response.message || 'An error occurred'
+  } else {
+    navigateTo('/')
+  }
 }
 </script>
 
@@ -35,9 +39,13 @@ async function signIn() {
         type="password"
         name="password"
       >
+
       <button type="submit">
         Sign In
       </button>
     </form>
+    <div>
+      {{ error }}
+    </div>
   </div>
 </template>

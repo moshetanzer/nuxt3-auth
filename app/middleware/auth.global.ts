@@ -1,4 +1,4 @@
-export default defineNuxtRouteMiddleware(async (to, from) => {
+export default defineNuxtRouteMiddleware(async () => {
   const user = useUser()
   const data = user.value ||= await useRequestFetch()('/api/auth/user')
   if (data) {

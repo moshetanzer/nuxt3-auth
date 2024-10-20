@@ -1,3 +1,5 @@
+import type { H3Event } from 'h3'
+
 export default defineEventHandler(async (event) => {
   // CSRF Protection
   if (event.node.req.method !== 'GET') {
@@ -8,7 +10,45 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Session
+  // Rate Limiting
+  const RATE_LIMIT = 100
+  const RATE_LIMIT_WINDOW = 60
+
+  const storage = useStorage()
+  const ip = getClientIP(event)
+  const key = `rate-limit:${ip}`
+
+  const [current, ttl] = await storage.getItem<[number, number]>(key) || [0, 0]
+
+  if (current >= RATE_LIMIT) {
+    setRateLimitHeaders(event, current, ttl)
+    throw createError({
+      statusCode: 429,
+      statusMessage: 'Too Many Requests'
+    })
+  }
+
+  const newCount = current + 1
+  if (newCount === 1) {
+    await storage.setItem(key, [newCount, RATE_LIMIT_WINDOW], { ttl: RATE_LIMIT_WINDOW })
+  } else {
+    await storage.setItem(key, [newCount, ttl])
+  }
+
+  setRateLimitHeaders(event, newCount, ttl)
+
+  function getClientIP(event: H3Event) {
+    return event.node.req.headers['x-forwarded-for']
+      || event.node.req.connection.remoteAddress
+  }
+
+  function setRateLimitHeaders(event: H3Event, current: number, ttl: number) {
+    event.node.res.setHeader('X-RateLimit-Limit', RATE_LIMIT)
+    event.node.res.setHeader('X-RateLimit-Remaining', Math.max(0, RATE_LIMIT - current))
+    event.node.res.setHeader('X-RateLimit-Reset', Math.ceil(Date.now() / 1000 + ttl))
+  }
+
+  // Session Management
   const sessionId = getCookie(event, 'sessionId')
   if (!sessionId) {
     event.context.session = null
