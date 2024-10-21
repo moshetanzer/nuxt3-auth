@@ -6,7 +6,8 @@ export default defineNuxtRouteMiddleware((to, from) => {
     if (!requiredRoles.includes(user.value.role)) {
       // home page should be available to all users to avoid infinite redirect loops
       if (from.path === to.path) return navigateTo('/')
-      return navigateTo(from.path)
+      //   return navigateTo(from.path)
+      return navigateTo('/unauthorized')
     }
   }
 })
