@@ -10,4 +10,7 @@ export default defineNuxtRouteMiddleware((to, from) => {
       return navigateTo('/unauthorized')
     }
   }
+  if (to.meta.emailVerification && !user.value.email_verified) {
+    return navigateTo('/verify-email')
+  }
 })
