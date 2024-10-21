@@ -3,13 +3,20 @@ import argon2 from 'argon2'
 import type { H3Event } from 'h3'
 import pg from 'pg'
 
-interface User {
+export interface User {
   id: string
   email: string
   fname: string
   lname: string
   failed_attempts: number
+  email_verified: boolean
 }
+export interface Session {
+  id: string
+  user_id: string
+  expires_at: Date
+}
+
 const { Pool } = pg
 const connectionString = useRuntimeConfig().authDb
 const authDB = new Pool({
@@ -117,7 +124,9 @@ export async function verifySession(sessionId: string) {
     role: result.rows[0].role,
     fname: result.rows[0].fname,
     lname: result.rows[0].lname,
-    email: result.rows[0].email
+    email: result.rows[0].email,
+    email_verified: result.rows[0].email_verified,
+    id: result.rows[0].id
   }
 
   return { session, user }

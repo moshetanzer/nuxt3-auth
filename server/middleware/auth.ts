@@ -1,4 +1,5 @@
 import type { H3Event } from 'h3'
+import type { User, Session } from '~~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
   // CSRF Protection
@@ -70,22 +71,9 @@ export default defineEventHandler(async (event) => {
   }
 })
 
-interface User {
-  role: string
-  fname: string
-  lname: string
-  email: string
-}
-
-interface Session {
-  id: string
-  user_id: string
-  expires_at: Date
-}
-
 declare module 'h3' {
   interface H3EventContext {
-    user: User | null
+    user: Partial<User> | null
     session: Session | null
   }
 }
