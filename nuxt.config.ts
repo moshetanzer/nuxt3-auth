@@ -7,7 +7,8 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/api/admin/**': {
-      roles: ['admin']
+      roles: ['admin'],
+      emailVerification: true
     },
     '/api/user/**': {
       roles: ['user', 'admin']
