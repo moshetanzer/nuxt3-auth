@@ -1,4 +1,4 @@
-import type { H3Event } from 'h3'
+import type { H3Event, EventHandler } from 'h3'
 import type { User, Session } from '~~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
@@ -69,8 +69,40 @@ export default defineEventHandler(async (event) => {
     await deleteSession(sessionId)
     deleteCookie(event, 'sessionId')
   }
-})
 
+  const roleBasedAuth: EventHandler = (event: H3Event) => {
+    const rules = getRouteRules(event).roles as string[]
+    const to = event.node.req.url
+
+    if (!rules || rules.length === 0) {
+      return // No rules defined, allow access
+    }
+
+    const userRoles = event.context.user?.role || []
+
+    if (!hasRequiredRole(userRoles, rules)) {
+      return event.node.res.writeHead(403).end('Unauthorized: Insufficient role')
+    }
+
+    if (to && !checkAccess(userRoles, to, rules)) {
+      return event.node.res.writeHead(403).end('Unauthorized: No access to this route')
+    }
+  }
+
+  function hasRequiredRole(userRoles: string[], requiredRoles: string[]): boolean {
+    return requiredRoles.some(role => userRoles.includes(role))
+  }
+
+  function checkAccess(userRoles: string[], to: string, rules: string[]): boolean {
+    return rules.some((rule) => {
+      const [roleName, routePattern] = rule.split(':')
+      const regex = new RegExp(routePattern)
+      return regex.test(to) && userRoles.includes(roleName)
+    })
+  }
+
+  roleBasedAuth(event)
+})
 declare module 'h3' {
   interface H3EventContext {
     user: Partial<User> | null

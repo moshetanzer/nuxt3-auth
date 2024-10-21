@@ -10,6 +10,7 @@ export interface User {
   lname: string
   failed_attempts: number
   email_verified: boolean
+  role: string[]
 }
 export interface Session {
   id: string
