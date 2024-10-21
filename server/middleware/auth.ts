@@ -103,14 +103,14 @@ export default defineEventHandler(async (event) => {
 
   roleBasedAuth(event)
 
-  // Email Verified check
-  if (!event.req.url.startsWith('/api/auth/')) {
-    if (!event.context.user?.email_verified) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Email not verified'
-      })
-    }
+  // Email Verification
+  const rules = getRouteRules(event).emailVerification as boolean
+  const to = event.node.req.url
+  if (rules && to && !event.context.user?.email_verified) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Email not verified'
+    })
   }
 })
 

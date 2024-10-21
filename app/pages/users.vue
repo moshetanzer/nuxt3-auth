@@ -1,3 +1,12 @@
+<script setup lang="ts">
+definePageMeta({
+  middleware: ['protected'],
+  auth: {
+    roles: ['admin']
+  }
+})
+</script>
+
 <template>
   <div>
     <h1>Users</h1>
