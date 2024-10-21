@@ -2,7 +2,7 @@
 definePageMeta({
   middleware: ['protected'],
   auth: {
-    roles: ['admin']
+    roles: ['user']
   }
 })
 </script>
