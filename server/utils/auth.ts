@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import argon2 from 'argon2'
-import type { H3Event } from 'h3'
+import type { H3Event, EventHandler } from 'h3'
 import pg from 'pg'
 
 export interface User {
@@ -56,7 +56,7 @@ async function verifyPassword(password: string, hash: string) {
  * @param {string} email The email address of the user to check.
  * @returns {Promise<boolean>} A promise that resolves to true if the account is locked, false otherwise.
  */
-async function checkIfLocked(email: string) {
+async function checkIfLocked(email: string): Promise<boolean> {
   const result = await authDB.query<User>(`SELECT email, failed_attempts FROM users WHERE email = $1`, [email])
   if (result.rows[0].failed_attempts >= 5) {
     return true
@@ -103,7 +103,7 @@ export async function createSession(event: H3Event, userId: string) {
 }
 export async function verifySession(sessionId: string) {
   const query = `
-            SELECT s.*, u.role, u.fname, u.lname, u.email
+            SELECT s.*, u.role, u.fname, u.lname, u.email, u.email_verified, u.email_mfa
             FROM sessions s
             JOIN users u ON s.user_id = u.id
             WHERE s.id = $1 AND s.expires_at > NOW()
@@ -127,7 +127,8 @@ export async function verifySession(sessionId: string) {
     lname: result.rows[0].lname,
     email: result.rows[0].email,
     email_verified: result.rows[0].email_verified,
-    id: result.rows[0].id
+    id: result.rows[0].id,
+    email_mfa: result.rows[0].email_mfa
   }
 
   return { session, user }
@@ -221,4 +222,107 @@ export async function refreshSession(sessionId: string) {
 export async function cleanupExpiredSessions() {
   const query = 'DELETE FROM sessions WHERE expires_at < NOW()'
   await authDB.query(query)
+}
+
+export async function handleRateLimit(event: H3Event): Promise<void> {
+  const RATE_LIMIT = 100
+  const RATE_LIMIT_WINDOW = 60
+
+  const storage = useStorage()
+  const ip = getClientIP(event)
+  const key = `rate-limit:${ip}`
+
+  const [current, ttl] = await storage.getItem<[number, number]>(key) || [0, 0]
+
+  if (current >= RATE_LIMIT) {
+    setRateLimitHeaders(event, current, ttl)
+    throw createError({
+      statusCode: 429,
+      statusMessage: 'Too Many Requests'
+    })
+  }
+
+  const newCount = current + 1
+  if (newCount === 1) {
+    await storage.setItem(key, [newCount, RATE_LIMIT_WINDOW], { ttl: RATE_LIMIT_WINDOW })
+  } else {
+    await storage.setItem(key, [newCount, ttl])
+  }
+
+  setRateLimitHeaders(event, newCount, ttl)
+
+  function getClientIP(event: H3Event): string {
+    return event.node.req.headers['x-forwarded-for'] as string
+      || event.node.req.connection.remoteAddress as string
+  }
+
+  function setRateLimitHeaders(event: H3Event, current: number, ttl: number): void {
+    event.node.res.setHeader('X-RateLimit-Limit', RATE_LIMIT)
+    event.node.res.setHeader('X-RateLimit-Remaining', Math.max(0, RATE_LIMIT - current))
+    event.node.res.setHeader('X-RateLimit-Reset', Math.ceil(Date.now() / 1000 + ttl))
+  }
+}
+
+export const roleBasedAuth: EventHandler = (event: H3Event) => {
+  const rules = getRouteRules(event).roles as string[]
+  const to = event.node.req.url
+
+  if (!rules || rules.length === 0) {
+    return // No rules defined, allow access
+  }
+
+  const userRoles = event.context.user?.role || []
+
+  if (!hasRequiredRole(userRoles, rules)) {
+    return event.node.res.writeHead(403).end('Unauthorized: Insufficient role')
+  }
+
+  if (to && !checkAccess(userRoles, to, rules)) {
+    return event.node.res.writeHead(403).end('Unauthorized: No access to this route')
+  }
+}
+
+function hasRequiredRole(userRoles: string[], requiredRoles: string[]): boolean {
+  return requiredRoles.some(role => userRoles.includes(role))
+}
+
+function checkAccess(userRoles: string[], to: string, rules: string[]): boolean {
+  return rules.some((rule) => {
+    const [roleName, routePattern] = rule.split(':')
+    const regex = new RegExp(routePattern)
+    return regex.test(to) && userRoles.includes(roleName)
+  })
+}
+export async function emailVerification(event: H3Event) {
+  const rules = getRouteRules(event).emailVerification as boolean
+  const to = event.node.req.url
+  if (rules && to && !event.context.user?.email_verified) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Email not verified'
+    })
+  }
+}
+
+export async function handleSession(event: H3Event): Promise<void> {
+  const sessionId = getCookie(event, 'sessionId')
+
+  if (!sessionId) {
+    event.context.session = null
+    event.context.user = null
+    return
+  }
+
+  const sessionData = await verifySession(sessionId)
+
+  if (sessionData) {
+    const { session, user } = sessionData
+    event.context.session = session
+    event.context.user = user
+  } else {
+    event.context.session = null
+    event.context.user = null
+    await deleteSession(sessionId)
+    deleteCookie(event, 'sessionId')
+  }
 }
