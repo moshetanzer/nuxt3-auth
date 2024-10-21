@@ -65,11 +65,11 @@ export default defineEventHandler(async (event) => {
   } else {
     event.context.session = null
     event.context.user = null
-    // Clear the invalid session
     await deleteSession(sessionId)
     deleteCookie(event, 'sessionId')
   }
 
+  // Role-Based Authorization
   const roleBasedAuth: EventHandler = (event: H3Event) => {
     const rules = getRouteRules(event).roles as string[]
     const to = event.node.req.url
@@ -102,7 +102,18 @@ export default defineEventHandler(async (event) => {
   }
 
   roleBasedAuth(event)
+
+  // Email Verified check
+  if (!event.req.url.startsWith('/api/auth/')) {
+    if (!event.context.user?.email_verified) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Email not verified'
+      })
+    }
+  }
 })
+
 declare module 'h3' {
   interface H3EventContext {
     user: Partial<User> | null
