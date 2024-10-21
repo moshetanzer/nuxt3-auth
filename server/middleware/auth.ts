@@ -1,4 +1,5 @@
-import type { H3Event } from 'h3'
+import type { H3Event, EventHandler } from 'h3'
+import type { User, Session } from '~~/server/utils/auth'
 
 export default defineEventHandler(async (event) => {
   // CSRF Protection
@@ -64,28 +65,58 @@ export default defineEventHandler(async (event) => {
   } else {
     event.context.session = null
     event.context.user = null
-    // Clear the invalid session
     await deleteSession(sessionId)
     deleteCookie(event, 'sessionId')
   }
+
+  // Role-Based Authorization
+  const roleBasedAuth: EventHandler = (event: H3Event) => {
+    const rules = getRouteRules(event).roles as string[]
+    const to = event.node.req.url
+
+    if (!rules || rules.length === 0) {
+      return // No rules defined, allow access
+    }
+
+    const userRoles = event.context.user?.role || []
+
+    if (!hasRequiredRole(userRoles, rules)) {
+      return event.node.res.writeHead(403).end('Unauthorized: Insufficient role')
+    }
+
+    if (to && !checkAccess(userRoles, to, rules)) {
+      return event.node.res.writeHead(403).end('Unauthorized: No access to this route')
+    }
+  }
+
+  function hasRequiredRole(userRoles: string[], requiredRoles: string[]): boolean {
+    return requiredRoles.some(role => userRoles.includes(role))
+  }
+
+  function checkAccess(userRoles: string[], to: string, rules: string[]): boolean {
+    return rules.some((rule) => {
+      const [roleName, routePattern] = rule.split(':')
+      const regex = new RegExp(routePattern)
+      return regex.test(to) && userRoles.includes(roleName)
+    })
+  }
+
+  roleBasedAuth(event)
+
+  // Email Verified check
+  if (!event.req.url.startsWith('/api/auth/')) {
+    if (!event.context.user?.email_verified) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'Email not verified'
+      })
+    }
+  }
 })
-
-interface User {
-  role: string
-  fname: string
-  lname: string
-  email: string
-}
-
-interface Session {
-  id: string
-  user_id: string
-  expires_at: Date
-}
 
 declare module 'h3' {
   interface H3EventContext {
-    user: User | null
+    user: Partial<User> | null
     session: Session | null
   }
 }

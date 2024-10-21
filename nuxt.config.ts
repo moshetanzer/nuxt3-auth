@@ -5,6 +5,14 @@ export default defineNuxtConfig({
   runtimeConfig: {
     authDb: ''
   },
+  routeRules: {
+    '/api/admin/**': {
+      roles: ['admin']
+    },
+    '/api/user/**': {
+      roles: ['user', 'admin']
+    }
+  },
   future: {
     compatibilityVersion: 4
   },

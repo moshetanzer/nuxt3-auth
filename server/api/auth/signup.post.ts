@@ -4,7 +4,7 @@ export default defineEventHandler(async (event) => {
   if (!body.fname || !body.lname || !body.email || !body.password) {
     return createError({
       statusCode: 400,
-      statusMessage: 'Missing fname, lname, email or password'
+      statusMessage: 'Missing firstname, lastname, email or password'
     })
   }
 
