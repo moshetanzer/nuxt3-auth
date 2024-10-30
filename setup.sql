@@ -6,7 +6,9 @@ CREATE TABLE users (
     password text NOT NULL,
     role character varying(20) NOT NULL,
     failed_attempts integer DEFAULT 0 NOT NULL,
-    email_verified boolean DEFAULT false NOT NULL
+    email_verified boolean DEFAULT false NOT NULL,
+    email_mfa boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 ALTER TABLE ONLY users
