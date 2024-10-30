@@ -138,7 +138,8 @@ export async function verifySession(sessionId: string) {
     const session = {
       id: result.rows[0].id,
       user_id: result.rows[0].user_id,
-      expires_at: result.rows[0].expires_at
+      expires_at: result.rows[0].expires_at,
+      two_factor_verified: result.rows[0].two_factor_verified
     }
 
     const user = {
@@ -157,10 +158,11 @@ export async function verifySession(sessionId: string) {
   }
 }
 
-export async function deleteSession(sessionId: string) {
+export async function deleteSession(event: H3Event, sessionId: string) {
   try {
     const query = 'DELETE FROM sessions WHERE id = $1'
     await authDB.query(query, [sessionId])
+    deleteCookie(event, 'sessionId')
   } catch (error) {
     await auditLogger('sessionId' + sessionId, 'deleteSession', String((error as Error).message), 'unknown', 'unknown', 'error')
   }
@@ -381,7 +383,6 @@ export async function handleSession(event: H3Event): Promise<void> {
   } else {
     event.context.session = null
     event.context.user = null
-    await deleteSession(sessionId)
-    deleteCookie(event, 'sessionId')
+    await deleteSession(event, sessionId)
   }
 }

@@ -5,14 +5,8 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  await deleteSession(event.context.session.id)
-  setCookie(event, 'sessionId', '', {
-    path: '/',
-    maxAge: 0,
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: true
-  })
+  await deleteSession(event, event.context.session.id)
+
   return {
     message: 'Logged out'
   }
