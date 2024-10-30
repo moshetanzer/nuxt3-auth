@@ -35,4 +35,13 @@ CREATE INDEX idx_sessions_user_id ON sessions USING btree (user_id);
 ALTER TABLE ONLY sessions
     ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-
+CREATE TABLE audit_logs (
+    id serial NOT NULL,
+    email character varying(100) NOT NULL,
+    action character varying(100) NOT NULL,
+    message text NOT NULL,
+    ip character varying(50) NOT NULL,
+    user_agent text NOT NULL,
+    status character varying(20) NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);

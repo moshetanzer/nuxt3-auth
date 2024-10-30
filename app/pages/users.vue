@@ -5,12 +5,9 @@ definePageMeta({
     roles: ['user']
   }
 })
-const { data: users, status, error } = await useFetch('/api/admin/users',
-  { method: 'POST' }
-)
-const { data: user } = await useFetch('/api/user/test', {
-  method: 'POST'
 
+const { data: test } = await useFetch('/api/user/test', {
+  method: 'POST'
 })
 </script>
 
@@ -18,11 +15,7 @@ const { data: user } = await useFetch('/api/user/test', {
   <div>
     <h1>Users</h1>
 
-    {{ users }}
-    {{ status }}
-    {{ error }}
-
-    {{ user }}
+    {{ test }}
     <NuxtLink to="/">
       Home
     </NuxtLink>
