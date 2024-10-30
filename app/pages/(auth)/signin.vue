@@ -5,7 +5,7 @@ definePageMeta({
 const email = ref('')
 const password = ref('')
 const status = ref('')
-
+const route = useRoute()
 async function signIn() {
   try {
     await $fetch('/api/auth/signin', {
@@ -15,7 +15,12 @@ async function signIn() {
         password: password.value
       }
     })
-    navigateTo('/')
+    if (route.query.redirect) {
+      // this is safe since nuxt will throw error if redirect is out of app
+      navigateTo(route.query.redirect as string)
+    } else {
+      navigateTo('/')
+    }
   } catch (error: unknown) {
     if (error instanceof Error) {
       status.value = error.message

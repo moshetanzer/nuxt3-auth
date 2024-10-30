@@ -1,6 +1,11 @@
 export default defineNuxtRouteMiddleware((to, from) => {
   const user = useUser()
-  if (!user.value) return navigateTo('/signin')
+  if (!user.value) {
+    return navigateTo({
+      path: '/signin',
+      query: to.fullPath !== '/' ? { redirect: to.fullPath } : {}
+    })
+  }
   if (to.meta.auth) {
     const requiredRoles = (to.meta.auth as { roles: string[] }).roles || []
     if (!requiredRoles.includes(user.value.role)) {

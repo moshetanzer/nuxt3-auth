@@ -2,7 +2,7 @@
 definePageMeta({
   middleware: ['protected'],
   auth: {
-    roles: ['admin']
+    roles: ['user']
   }
 })
 const { data: users, status, error } = await useFetch('/api/admin/users',
