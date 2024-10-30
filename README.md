@@ -2,6 +2,6 @@
 
 This is still a WIP
 
-- Role Based frontend and backend auth
+- Role Based frontend and backend auth - Complete
 - 2FA
 - Email Verification
