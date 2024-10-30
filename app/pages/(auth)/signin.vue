@@ -1,6 +1,6 @@
 <script setup lang="ts">
 definePageMeta({
-  middleware: ['signin']
+  middleware: ['protected-from-logged-in']
 })
 const email = ref('')
 const password = ref('')
