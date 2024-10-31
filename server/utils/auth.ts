@@ -43,9 +43,9 @@ const ARGON2_CONFIG = {
 }
 
 const MAX_FAILED_ATTEMPTS = useRuntimeConfig().maxFailedAttempts || 5 as number
-const SESSION_TOTAL_DURATION = useRuntimeConfig().sessionTotalDuration || 30 * 24 * 60 * 60 * 1000 // 30 days total
-const SESSION_SLIDING_WINDOW = useRuntimeConfig().sessionSlidingWindow || 15 * 24 * 60 * 60 * 1000 // 15 days sliding window
-const SESSION_REFRESH_INTERVAL = useRuntimeConfig().sessionRefreshInterval || 30 * 24 * 60 * 60 * 1000 // Refresh every 30 days
+const SESSION_TOTAL_DURATION = useRuntimeConfig().sessionTotalDuration || 30 * 24 * 60 * 60 * 1000 as number// 30 days total
+const SESSION_SLIDING_WINDOW = useRuntimeConfig().sessionSlidingWindow || 15 * 24 * 60 * 60 * 1000 as number // 15 days sliding window
+const SESSION_REFRESH_INTERVAL = useRuntimeConfig().sessionRefreshInterval || 30 * 24 * 60 * 60 * 1000 as number// Refresh every 30 days
 
 async function hashPassword(password: string) {
   return await argon2.hash(password, ARGON2_CONFIG)
@@ -111,12 +111,12 @@ export async function verifySession(sessionId: string) {
         u.email, 
         u.email_verified, 
         u.email_mfa,
-        (s.created_at + INTERVAL '${SESSION_TOTAL_DURATION / 1000} seconds') AS absolute_expiration
+        (s.created_at + INTERVAL '${Number(SESSION_TOTAL_DURATION) / 1000} seconds') AS absolute_expiration
       FROM sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.id = $1 
         AND s.expires_at > NOW() 
-        AND (s.created_at + INTERVAL '${SESSION_TOTAL_DURATION / 1000} seconds') > NOW()
+        AND (s.created_at + INTERVAL '${Number(SESSION_TOTAL_DURATION) / 1000} seconds') > NOW()
     `
 
     const result = await authDB.query(query, [sessionId])
@@ -128,7 +128,7 @@ export async function verifySession(sessionId: string) {
     const sessionRow = result.rows[0]
     const currentTime = new Date()
     const expiresAt = new Date(sessionRow.expires_at)
-    const slidingWindowThreshold = new Date(currentTime.getTime() - SESSION_SLIDING_WINDOW)
+    const slidingWindowThreshold = new Date(currentTime.getTime() - Number(SESSION_SLIDING_WINDOW))
 
     if (expiresAt <= slidingWindowThreshold) {
       try {
@@ -182,7 +182,7 @@ export async function verifySession(sessionId: string) {
 export async function refreshSession(sessionId: string) {
   try {
     const currentTime = new Date()
-    const newExpiresAt = new Date(currentTime.getTime() + SESSION_REFRESH_INTERVAL)
+    const newExpiresAt = new Date(currentTime.getTime() + Number(SESSION_REFRESH_INTERVAL))
 
     const query = `
       UPDATE sessions 
@@ -191,7 +191,7 @@ export async function refreshSession(sessionId: string) {
         updated_at = NOW(),
         last_activity_at = NOW()
       WHERE id = $2 
-        AND (created_at + INTERVAL '${SESSION_TOTAL_DURATION / 1000} seconds') > NOW()
+        AND (created_at + INTERVAL '${Number(SESSION_TOTAL_DURATION) / 1000} seconds') > NOW()
       RETURNING *
     `
     const result = await authDB.query(query, [newExpiresAt, sessionId])
@@ -233,7 +233,7 @@ export async function createSession(event: H3Event, userId: string) {
     }
     const sessionId = generateRandomId(32)
     const currentTime = new Date()
-    const expiresAt = new Date(currentTime.getTime() + SESSION_REFRESH_INTERVAL)
+    const expiresAt = new Date(currentTime.getTime() + Number(SESSION_REFRESH_INTERVAL))
 
     const query = `
       INSERT INTO sessions (
