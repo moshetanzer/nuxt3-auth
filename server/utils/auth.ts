@@ -450,24 +450,71 @@ export async function verifyResetToken(event: H3Event) {
 }
 
 export async function resetPassword(event: H3Event) {
-  const { resetToken, password, confirmPassword } = await readBody(event)
-  if (password !== confirmPassword) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Passwords do not match'
-    })
-  }
-  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
-  const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken])
-  const user = result.rows[0]
-  if (!user) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Invalid token'
-    })
-  }
+  try {
+    const { resetToken, password, confirmPassword } = await readBody(event)
 
-  const hashedPassword = await hashPassword(password)
-  await authDB.query(`UPDATE users SET password = $1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = $2`, [hashedPassword, user.id])
-  return true
+    if (!resetToken || !password || !confirmPassword) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Missing required fields'
+      })
+    }
+
+    if (password !== confirmPassword) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Passwords do not match'
+      })
+    }
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+    const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken]).catch((error) => {
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Database error while checking reset token'
+      })
+    })
+    const user = result.rows[0]
+    if (!user) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Invalid token'
+      })
+    }
+
+    const hashedPassword = await hashPassword(password)
+
+    await authDB.query(`UPDATE users SET password = $1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = $2`, [hashedPassword, user.id]).catch(async (error) => {
+      await auditLogger(
+        user.email,
+        'resetPassword',
+        String((error as Error).message),
+        'unknown',
+        'unknown',
+        'error'
+      )
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to update password'
+      })
+    })
+
+    await auditLogger(
+      user.email,
+      'resetPassword',
+      'Password reset successful',
+      'unknown',
+      'unknown',
+      'success'
+    ).catch(() => {
+      console.error('Failed to log password reset success')
+    })
+
+    return true
+  } catch (error) {
+    await auditLogger('unknown', 'resetPassword', String((error as Error).message), 'unknown', 'unknown', 'error')
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'An unexpected error occurred'
+    })
+  }
 }

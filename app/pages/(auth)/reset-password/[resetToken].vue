@@ -6,18 +6,22 @@ const password = ref('')
 const confirmPassword = ref('')
 const status = ref('')
 async function resetPassword() {
-  const response = await $fetch('/api/auth/reset-password/reset', {
-    method: 'POST',
-    body: {
-      password: password.value,
-      confirmPassword: confirmPassword.value,
-      resetToken: useRoute().params.resetToken
+  try {
+    const response = await $fetch('/api/auth/reset-password/reset', {
+      method: 'POST',
+      body: {
+        password: password.value,
+        confirmPassword: confirmPassword.value,
+        resetToken: useRoute().params.resetToken
+      }
+    })
+    if (response.success === true) {
+      status.value = response.message
+    } else {
+      status.value = response.message
     }
-  })
-  if (response.success === true) {
-    status.value = response.message
-  } else {
-    status.value = response.message
+  } catch (error) {
+    status.value = (error as Error).message
   }
 }
 </script>

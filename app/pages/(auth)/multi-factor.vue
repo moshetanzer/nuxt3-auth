@@ -1,17 +1,21 @@
 <script setup lang="ts">
 const code = ref('')
-
+const status = ref('')
 async function verify() {
-  const response = await $fetch('/api/auth/verify', {
-    method: 'POST',
-    body: {
-      code: code.value
+  try {
+    const response = await $fetch('/api/auth/verify', {
+      method: 'POST',
+      body: {
+        code: code.value
+      }
+    })
+    if (!response.success) {
+      status.value = response.message
+    } else {
+      navigateTo('/')
     }
-  })
-  if (response.error) {
-    error.value = response.error
-  } else {
-    navigateTo('/')
+  } catch (error) {
+    status.value = (error as Error).message
   }
 }
 </script>
@@ -31,5 +35,6 @@ async function verify() {
         Verify
       </button>
     </form>
+    {{ status }}
   </div>
 </template>
