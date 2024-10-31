@@ -439,13 +439,45 @@ export async function resetPasswordRequest(event: H3Event) {
 }
 
 export async function verifyResetToken(event: H3Event) {
-  const { resetToken: token } = getRouterParams(event)
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex')
-  const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken])
-  if (result.rows.length === 0) {
-    return false
-  } else if (result.rows.length === 1) {
-    return true
+  try {
+    const { resetToken: token } = getRouterParams(event)
+
+    if (!token) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Reset token is required'
+      })
+    }
+    let hashedToken: string
+    try {
+      hashedToken = crypto.createHash('sha256').update(token).digest('hex')
+    } catch (error) {
+      console.error('Token hashing error:', error)
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to process reset token'
+      })
+    }
+    const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken]).catch(async (error) => {
+      await auditLogger('unknown', 'verifyResetToken', String((error as Error).message), 'unknown', 'unknown', 'error')
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Error verifying reset token'
+      })
+    })
+    if (result.rows.length === 0) {
+      await auditLogger('unknown', 'verifyResetToken', 'Invalid token', 'unknown', 'unknown', 'error')
+      return false
+    } else if (result.rows.length === 1) {
+      await auditLogger(result.rows[0].email, 'verifyResetToken', 'Token verified', 'unknown', 'unknown', 'success')
+      return true
+    }
+  } catch (error) {
+    await auditLogger('unknown', 'verifyResetToken', String((error as Error).message), 'unknown', 'unknown', 'error')
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'An unexpected error occurred'
+    })
   }
 }
 
@@ -466,8 +498,18 @@ export async function resetPassword(event: H3Event) {
         statusMessage: 'Passwords do not match'
       })
     }
-    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
-    const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken]).catch((error) => {
+    let hashedToken: string
+    try {
+      hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+    } catch (error) {
+      await auditLogger('unknown', 'resetPassword', String((error as Error).message), 'unknown', 'unknown', 'error')
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'Failed to process reset token'
+      })
+    }
+    const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken]).catch(async (error) => {
+      await auditLogger('unknown', 'resetPassword', String((error as Error).message), 'unknown', 'unknown', 'error')
       throw createError({
         statusCode: 500,
         statusMessage: 'Database error while checking reset token'
