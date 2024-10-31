@@ -443,10 +443,8 @@ export async function verifyResetToken(event: H3Event) {
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex')
   const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken])
   if (result.rows.length === 0) {
-    console.log('failed')
     return false
   } else if (result.rows.length === 1) {
-    console.log('verified')
     return true
   }
 }

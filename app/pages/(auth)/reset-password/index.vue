@@ -1,14 +1,18 @@
 <script setup lang="ts">
 const email = ref('')
-
+const status = ref('')
 async function forgotPassword() {
-  const response = await $fetch('/api/auth/reset-password', {
-    method: 'POST',
-    body: {
-      email: email.value
-    }
-  })
-  console.log(response)
+  try {
+    const response = await $fetch('/api/auth/reset-password', {
+      method: 'POST',
+      body: {
+        email: email.value
+      }
+    })
+    status.value = response.message
+  } catch (error) {
+    status.value = (error as Error).message
+  }
 }
 </script>
 
@@ -27,5 +31,6 @@ async function forgotPassword() {
         Submit
       </button>
     </form>
+    {{ status }}
   </div>
 </template>
