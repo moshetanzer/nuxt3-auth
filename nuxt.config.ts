@@ -8,7 +8,10 @@ export default defineNuxtConfig({
     emailPort: '',
     emailUser: '',
     emailPassword: '',
-    baseUrl: 'https://localhost:3002'
+    sessionTotalDuration: '',
+    sessionSlidingWindow: '',
+    sessionRefreshInterval: '',
+    baseUrl: 'http://localhost:3002'
   },
   routeRules: {
     '/api/admin/**': {

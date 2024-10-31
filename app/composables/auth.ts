@@ -13,6 +13,14 @@ export const useUser = () => {
   const user = useState<User | null>('user', () => null)
   return user
 }
+export async function logOut() {
+  await $fetch('/api/auth/signout', {
+    method: 'POST'
+  })
+  const user = useUser()
+  user.value = null
+  await navigateTo('/')
+}
 
 export async function verifyToken(resetToken: string) {
   try {

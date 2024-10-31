@@ -43,10 +43,9 @@ const ARGON2_CONFIG = {
 }
 
 const MAX_FAILED_ATTEMPTS = useRuntimeConfig().maxFailedAttempts || 5 as number
-// Constants for session configuration
-const SESSION_TOTAL_DURATION = 30 * 24 * 60 * 60 * 1000 // 30 days total
-const SESSION_SLIDING_WINDOW = 15 * 24 * 60 * 60 * 1000 // 15 days sliding window
-const SESSION_REFRESH_INTERVAL = 30 * 24 * 60 * 60 * 1000 // Refresh every 30 days
+const SESSION_TOTAL_DURATION = useRuntimeConfig().sessionTotalDuration || 30 * 24 * 60 * 60 * 1000 // 30 days total
+const SESSION_SLIDING_WINDOW = useRuntimeConfig().sessionSlidingWindow || 15 * 24 * 60 * 60 * 1000 // 15 days sliding window
+const SESSION_REFRESH_INTERVAL = useRuntimeConfig().sessionRefreshInterval || 30 * 24 * 60 * 60 * 1000 // Refresh every 30 days
 
 async function hashPassword(password: string) {
   return await argon2.hash(password, ARGON2_CONFIG)

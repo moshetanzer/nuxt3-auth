@@ -29,7 +29,10 @@ async function resetPassword() {
 <template>
   <div>
     <h1>Forgot Password</h1>
-    <form @submit.prevent="resetPassword()">
+    <form
+      method="post"
+      @submit.prevent="resetPassword()"
+    >
       <label for="new-password">New Password</label>
       <input
         id="new-password"

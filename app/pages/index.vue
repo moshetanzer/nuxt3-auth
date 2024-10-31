@@ -3,9 +3,6 @@ definePageMeta({
   middleware: ['protected']
 })
 
-const logOut = () => {
-  navigateTo('/signout')
-}
 const user = useUser()
 </script>
 
@@ -18,7 +15,7 @@ const user = useUser()
         users
       </NuxtLink>
     </div>
-    <button @click="logOut">
+    <button @click="logOut()">
       Sign Out
     </button>
   </div>

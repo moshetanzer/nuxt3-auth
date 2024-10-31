@@ -19,7 +19,10 @@ async function forgotPassword() {
 <template>
   <div>
     <h1>Forgot Password</h1>
-    <form @submit.prevent="forgotPassword">
+    <form
+      method="post"
+      @submit.prevent="forgotPassword"
+    >
       <label for="email">Email</label>
       <input
         id="email"

@@ -32,7 +32,10 @@ async function signUp() {
 <template>
   <div>
     <h1>Sign Up</h1>
-    <form @submit.prevent="signUp">
+    <form
+      method="post"
+      @submit.prevent="signUp"
+    >
       <label for="fname">First Name</label>
       <input
         id="fname"
