@@ -3,7 +3,12 @@ export default defineNuxtConfig({
   ssr: true,
   devtools: { enabled: false },
   runtimeConfig: {
-    authDb: ''
+    authDb: '',
+    emailHost: '',
+    emailPort: '',
+    emailUser: '',
+    emailPassword: '',
+    baseUrl: 'https://localhost:3002'
   },
   routeRules: {
     '/api/admin/**': {

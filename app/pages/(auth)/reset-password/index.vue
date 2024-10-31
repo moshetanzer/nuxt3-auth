@@ -2,7 +2,7 @@
 const email = ref('')
 
 async function forgotPassword() {
-  const response = await $fetch('/api/auth/forgot-password', {
+  const response = await $fetch('/api/auth/reset-password', {
     method: 'POST',
     body: {
       email: email.value

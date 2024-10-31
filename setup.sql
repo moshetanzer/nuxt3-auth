@@ -8,6 +8,8 @@ CREATE TABLE users (
     failed_attempts integer DEFAULT 0 NOT NULL,
     email_verified boolean DEFAULT false NOT NULL,
     email_mfa boolean DEFAULT false NOT NULL,
+    reset_token character varying(100),
+    reset_token_expires_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 

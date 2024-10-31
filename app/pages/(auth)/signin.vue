@@ -57,5 +57,18 @@ async function signIn() {
         Sign In
       </button>
     </form>
+    <NuxtLink
+      to="/reset-password"
+      role="button"
+    >
+      forgot password
+    </NuxtLink>
+
+    <NuxtLink
+      to="/signup"
+      role="button"
+    >
+      signup
+    </NuxtLink>
   </div>
 </template>

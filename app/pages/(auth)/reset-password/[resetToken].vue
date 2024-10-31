@@ -1,17 +1,24 @@
 <script setup lang="ts">
+definePageMeta({
+  middleware: ['reset-password-verification']
+})
 const password = ref('')
 const confirmPassword = ref('')
-
+const status = ref('')
 async function resetPassword() {
-  const response = await $fetch('/api/auth/forgot-password', {
+  const response = await $fetch('/api/auth/reset-password/reset', {
     method: 'POST',
     body: {
       password: password.value,
       confirmPassword: confirmPassword.value,
-      token: useRoute().query.resetToken
+      resetToken: useRoute().params.resetToken
     }
   })
-  console.log(response)
+  if (response.success === true) {
+    status.value = response.message
+  } else {
+    status.value = response.message
+  }
 }
 </script>
 
@@ -40,5 +47,6 @@ async function resetPassword() {
         reset password
       </button>
     </form>
+    {{ status }}
   </div>
 </template>

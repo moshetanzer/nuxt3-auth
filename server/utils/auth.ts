@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import argon2 from 'argon2'
 import type { H3Event, EventHandler } from 'h3'
 import pg from 'pg'
+import { sendEmail } from './mail'
 
 export interface User {
   id: string
@@ -10,6 +11,8 @@ export interface User {
   lname: string
   failed_attempts: number
   email_verified: boolean
+  reset_token: string
+  reset_token_expires_at: Date
   email_mfa: boolean
   role: string[]
 }
@@ -385,4 +388,88 @@ export async function handleSession(event: H3Event): Promise<void> {
     event.context.user = null
     await deleteSession(event, sessionId)
   }
+}
+
+export async function resetPasswordRequest(event: H3Event) {
+  const { email } = await readBody(event)
+  const user = await authDB.query<User>(`SELECT * FROM users WHERE email = $1`, [email])
+  if (user.rows.length === 0) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'We will send a password reset link to the email address if it exists in our system.'
+    })
+  }
+
+  const existingToken = user.rows[0].reset_token
+  const existingTokenExpiry = user.rows[0].reset_token_expires_at
+
+  let resetToken: string
+  let resetTokenExpiry: Date
+
+  if (existingToken && existingTokenExpiry > new Date()) {
+    // Reuse existing valid token
+    resetToken = existingToken
+    resetTokenExpiry = existingTokenExpiry
+  } else {
+    // Invalidate existing tokens and generate a new one
+    resetToken = generateRandomId(30)
+    resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
+  }
+
+  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+
+  try {
+    const query = `
+      UPDATE users
+      SET reset_token = $1, reset_token_expires_at = $2
+      WHERE email = $3
+    `
+    const values = [hashedToken, resetTokenExpiry, email]
+    await authDB.query(query, values)
+  } catch (error) {
+    await auditLogger(email, 'resetPasswordRequest', String((error as Error).message), 'unknown', 'unknown', 'error')
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'We will send a password reset link to the email address if it exists in our system.'
+    })
+  }
+
+  await sendEmail(email, 'Password Reset Request', `Click <a href="${useRuntimeConfig().baseUrl}/reset-password/${resetToken}">here</a> to reset your password.`)
+  return true
+}
+
+export async function verifyResetToken(event: H3Event) {
+  const { resetToken: token } = getRouterParams(event)
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex')
+  const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken])
+  if (result.rows.length === 0) {
+    console.log('failed')
+    return false
+  } else if (result.rows.length === 1) {
+    console.log('verified')
+    return true
+  }
+}
+
+export async function resetPassword(event: H3Event) {
+  const { resetToken, password, confirmPassword } = await readBody(event)
+  if (password !== confirmPassword) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Passwords do not match'
+    })
+  }
+  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+  const result = await authDB.query<User>(`SELECT * FROM users WHERE reset_token = $1 AND reset_token_expires_at > NOW()`, [hashedToken])
+  const user = result.rows[0]
+  if (!user) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Invalid token'
+    })
+  }
+
+  const hashedPassword = await hashPassword(password)
+  await authDB.query(`UPDATE users SET password = $1, reset_token = NULL, reset_token_expires_at = NULL WHERE id = $2`, [hashedPassword, user.id])
+  return true
 }
