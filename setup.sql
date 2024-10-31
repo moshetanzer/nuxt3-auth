@@ -21,8 +21,11 @@ ALTER TABLE ONLY users
 
 
 CREATE TABLE sessions (
-    id character(30) NOT NULL,
+    id character(64) NOT NULL,
     user_id character(15),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    last_activity_at TIMESTAMP DEFAULT NOW(),
     expires_at timestamp without time zone NOT NULL,
     two_factor_verified boolean DEFAULT false NOT NULL
 );

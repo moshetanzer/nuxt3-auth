@@ -43,6 +43,10 @@ const ARGON2_CONFIG = {
 }
 
 const MAX_FAILED_ATTEMPTS = useRuntimeConfig().maxFailedAttempts || 5 as number
+// Constants for session configuration
+const SESSION_TOTAL_DURATION = 30 * 24 * 60 * 60 * 1000 // 30 days total
+const SESSION_SLIDING_WINDOW = 15 * 24 * 60 * 60 * 1000 // 15 days sliding window
+const SESSION_REFRESH_INTERVAL = 30 * 24 * 60 * 60 * 1000 // Refresh every 30 days
 
 async function hashPassword(password: string) {
   return await argon2.hash(password, ARGON2_CONFIG)
@@ -97,40 +101,24 @@ async function resetFailedAttempts(email: string) {
   }
 }
 
-export async function createSession(event: H3Event, userId: string) {
-  const sessionId = generateRandomId(30)
-  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
-
-  const query = `
-      INSERT INTO sessions (id, user_id, expires_at)
-      VALUES ($1, $2, $3)
-      RETURNING id
-    `
-  const values = [sessionId, userId, expiresAt]
-  try {
-    await authDB.query(query, values)
-  } catch (error) {
-    const ip = getRequestIP(event) as string
-    const userAgent = event.node.req.headers['user-agent'] as string
-    await auditLogger(event.context.user?.email ?? userId, 'createSession', String((error as Error).message), ip, userAgent, 'error')
-  }
-
-  setCookie(event, 'sessionId', sessionId, {
-    path: '/',
-    maxAge: 60 * 60 * 24 * 30,
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: true
-  })
-}
 export async function verifySession(sessionId: string) {
   try {
     const query = `
-            SELECT s.*, u.role, u.fname, u.lname, u.email, u.email_verified, u.email_mfa
-            FROM sessions s
-            JOIN users u ON s.user_id = u.id
-            WHERE s.id = $1 AND s.expires_at > NOW()
-          `
+      SELECT 
+        s.*, 
+        u.role, 
+        u.fname, 
+        u.lname, 
+        u.email, 
+        u.email_verified, 
+        u.email_mfa,
+        (s.created_at + INTERVAL '${SESSION_TOTAL_DURATION / 1000} seconds') AS absolute_expiration
+      FROM sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.id = $1 
+        AND s.expires_at > NOW() 
+        AND (s.created_at + INTERVAL '${SESSION_TOTAL_DURATION / 1000} seconds') > NOW()
+    `
 
     const result = await authDB.query(query, [sessionId])
 
@@ -138,26 +126,194 @@ export async function verifySession(sessionId: string) {
       return null
     }
 
+    const sessionRow = result.rows[0]
+    const currentTime = new Date()
+    const expiresAt = new Date(sessionRow.expires_at)
+    const slidingWindowThreshold = new Date(currentTime.getTime() - SESSION_SLIDING_WINDOW)
+
+    if (expiresAt <= slidingWindowThreshold) {
+      try {
+        // Extend session expiration
+        await refreshSession(sessionId)
+      } catch (refreshError) {
+        await auditLogger(
+          sessionRow.email,
+          'sessionRefresh',
+          `Automatic session refresh failed: ${String(refreshError)}`,
+          'unknown',
+          'unknown',
+          'warning'
+        )
+        // Continue with existing session even if refresh fails
+      }
+    }
+
     const session = {
-      id: result.rows[0].id,
-      user_id: result.rows[0].user_id,
-      expires_at: result.rows[0].expires_at,
-      two_factor_verified: result.rows[0].two_factor_verified
+      id: sessionRow.id,
+      user_id: sessionRow.user_id,
+      expires_at: sessionRow.expires_at,
+      absolute_expiration: sessionRow.absolute_expiration,
+      two_factor_verified: sessionRow.two_factor_verified
     }
 
     const user = {
-      role: result.rows[0].role,
-      fname: result.rows[0].fname,
-      lname: result.rows[0].lname,
-      email: result.rows[0].email,
-      email_verified: result.rows[0].email_verified,
-      id: result.rows[0].id,
-      email_mfa: result.rows[0].email_mfa
+      role: sessionRow.role,
+      fname: sessionRow.fname,
+      lname: sessionRow.lname,
+      email: sessionRow.email,
+      email_verified: sessionRow.email_verified,
+      id: sessionRow.user_id,
+      email_mfa: sessionRow.email_mfa
     }
 
     return { session, user }
   } catch (error) {
-    await auditLogger('unknown', 'verifySession', String((error as Error).message), 'unknown', 'unknown', 'error')
+    await auditLogger(
+      'unknown',
+      'verifySession',
+      String((error as Error).message),
+      'unknown',
+      'unknown',
+      'error'
+    )
+    return null
+  }
+}
+
+export async function refreshSession(sessionId: string) {
+  try {
+    const currentTime = new Date()
+    const newExpiresAt = new Date(currentTime.getTime() + SESSION_REFRESH_INTERVAL)
+
+    const query = `
+      UPDATE sessions 
+      SET 
+        expires_at = $1, 
+        updated_at = NOW(),
+        last_activity_at = NOW()
+      WHERE id = $2 
+        AND (created_at + INTERVAL '${SESSION_TOTAL_DURATION / 1000} seconds') > NOW()
+      RETURNING *
+    `
+    const result = await authDB.query(query, [newExpiresAt, sessionId])
+
+    if (result.rows.length === 0) {
+      throw new Error('Session not found or expired')
+    }
+
+    await auditLogger(
+      'sessionId: ' + sessionId,
+      'refreshSession',
+      'Session successfully refreshed',
+      'unknown',
+      'unknown',
+      'info'
+    ).catch(console.error)
+
+    return result.rows[0]
+  } catch (error) {
+    await auditLogger(
+      'sessionId: ' + sessionId,
+      'refreshSession',
+      String((error as Error).message),
+      'unknown',
+      'unknown',
+      'error'
+    )
+    throw error
+  }
+}
+
+export async function createSession(event: H3Event, userId: string) {
+  try {
+    if (!userId) {
+      throw createError({
+        statusCode: 401,
+        statusMessage: 'User not found'
+      })
+    }
+    const sessionId = generateRandomId(32)
+    const currentTime = new Date()
+    const expiresAt = new Date(currentTime.getTime() + SESSION_REFRESH_INTERVAL)
+
+    const query = `
+      INSERT INTO sessions (
+        id, 
+        user_id, 
+        expires_at, 
+        created_at, 
+        updated_at, 
+        last_activity_at
+      ) VALUES ($1, $2, $3, NOW(), NOW(), NOW())
+      RETURNING *
+    `
+
+    await authDB.query(query, [sessionId, userId, expiresAt])
+
+    await auditLogger(
+      'userId: ' + userId,
+      'createSession',
+      'New session created',
+      'unknown',
+      'unknown',
+      'info'
+    ).catch(console.error)
+
+    setCookie(event, 'sessionId', sessionId, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: true
+    })
+  } catch (error) {
+    await auditLogger(
+      'unknown',
+      'createSession',
+      String((error as Error).message),
+      'unknown',
+      'unknown',
+      'error'
+    )
+    throw error
+  }
+}
+
+export async function handleSession(event: H3Event): Promise<void> {
+  try {
+    const sessionId = getCookie(event, 'sessionId')
+
+    if (!sessionId) {
+      event.context.session = null
+      event.context.user = null
+      return
+    }
+
+    const sessionData = await verifySession(sessionId)
+
+    if (sessionData) {
+      const { session, user } = sessionData
+      event.context.session = session
+      event.context.user = user
+    } else {
+      event.context.session = null
+      event.context.user = null
+      await deleteSession(event, sessionId)
+    }
+  } catch (error) {
+    console.error('Session handling error:', error)
+
+    event.context.session = null
+    event.context.user = null
+
+    await auditLogger(
+      'unknown',
+      'handleSession',
+      String((error as Error).message),
+      'unknown',
+      'unknown',
+      'error'
+    ).catch(console.error)
   }
 }
 
@@ -260,17 +416,6 @@ function safeURL(url: URL | string): URL | null {
   }
 }
 
-export async function refreshSession(sessionId: string) {
-  try {
-    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours from now
-    const query = 'UPDATE sessions SET expires_at = $1 WHERE id = $2 RETURNING *'
-    const result = await authDB.query(query, [newExpiresAt, sessionId])
-    return result.rows[0]
-  } catch (error) {
-    await auditLogger('sessionId: ' + sessionId, 'refreshSession', String((error as Error).message), 'unknown', 'unknown', 'error')
-  }
-}
-
 export async function cleanupExpiredSessions() {
   try {
     const query = 'DELETE FROM sessions WHERE expires_at < NOW()'
@@ -365,28 +510,6 @@ export async function emailVerification(event: H3Event) {
       statusCode: 401,
       statusMessage: 'Email not verified'
     })
-  }
-}
-
-export async function handleSession(event: H3Event): Promise<void> {
-  const sessionId = getCookie(event, 'sessionId')
-
-  if (!sessionId) {
-    event.context.session = null
-    event.context.user = null
-    return
-  }
-
-  const sessionData = await verifySession(sessionId)
-
-  if (sessionData) {
-    const { session, user } = sessionData
-    event.context.session = session
-    event.context.user = user
-  } else {
-    event.context.session = null
-    event.context.user = null
-    await deleteSession(event, sessionId)
   }
 }
 
