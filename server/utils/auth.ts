@@ -391,51 +391,100 @@ export async function handleSession(event: H3Event): Promise<void> {
 }
 
 export async function resetPasswordRequest(event: H3Event) {
-  const { email } = await readBody(event)
-  const user = await authDB.query<User>(`SELECT * FROM users WHERE email = $1`, [email])
-  if (user.rows.length === 0) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'We will send a password reset link to the email address if it exists in our system.'
-    })
-  }
-
-  const existingToken = user.rows[0].reset_token
-  const existingTokenExpiry = user.rows[0].reset_token_expires_at
-
-  let resetToken: string
-  let resetTokenExpiry: Date
-
-  if (existingToken && existingTokenExpiry > new Date()) {
-    // Reuse existing valid token
-    resetToken = existingToken
-    resetTokenExpiry = existingTokenExpiry
-  } else {
-    // Invalidate existing tokens and generate a new one
-    resetToken = generateRandomId(30)
-    resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
-  }
-
-  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
-
   try {
-    const query = `
+    const { email } = await readBody(event)
+
+    if (!email) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Email is required'
+      })
+    }
+    const user = await authDB.query<User>(`SELECT id, email, reset_token, reset_token_expires_at FROM users WHERE email = $1`, [email]).catch(async (error) => {
+      await auditLogger(
+        email,
+        'resetPasswordRequest',
+        `Database error: ${String((error as Error).message)}`,
+        'unknown',
+        'unknown',
+        'error'
+      )
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'An error occurred processing your request'
+      })
+    })
+    let resetToken: string
+    let resetTokenExpiry: Date
+    let hashedToken: string
+
+    if (user.rows.length === 0) {
+      // Still generate a token to prevent timing attacks, but don't save it
+      resetToken = generateRandomId(30)
+      resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000)
+      hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+      const errorEmailAddress = useRuntimeConfig().emailUser
+      await auditLogger(email, 'resetPasswordRequest', 'Email not found', 'unknown', 'unknown', 'error')
+      await sendEmail(errorEmailAddress, 'Password reset failed - ensure no timing attack', `Click <a href="${useRuntimeConfig().baseUrl}/reset-password/${resetToken}">here</a> to reset your password.`)
+
+      return true
+    }
+
+    const existingToken = user.rows[0].reset_token
+    const existingTokenExpiry = user.rows[0].reset_token_expires_at
+
+    if (existingToken && existingTokenExpiry && new Date(existingTokenExpiry) > new Date()) {
+      resetToken = existingToken
+      resetTokenExpiry = new Date(existingTokenExpiry)
+      hashedToken = existingToken
+    } else {
+    // Invalidate existing tokens and generate a new one
+      resetToken = generateRandomId(30)
+      resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000) // 1 hour from now
+      hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex')
+    }
+
+    await authDB.query(`
       UPDATE users
       SET reset_token = $1, reset_token_expires_at = $2
       WHERE email = $3
-    `
-    const values = [hashedToken, resetTokenExpiry, email]
-    await authDB.query(query, values)
+    `, [hashedToken, resetTokenExpiry, email]).catch(async (error) => {
+      await auditLogger(
+        email,
+        'resetPasswordRequest',
+        `Token update failed: ${String((error as Error).message)}`,
+        'unknown',
+        'unknown',
+        'error'
+      )
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'An error occurred processing your request'
+      })
+    })
+
+    await sendEmail(email, 'Password Reset Request', `Click <a href="${useRuntimeConfig().baseUrl}/reset-password/${resetToken}">here</a> to reset your password.`).catch(async (error) => {
+      await auditLogger(
+        email,
+        'resetPasswordRequest',
+        `Email sending failed: ${String((error as Error).message)}`,
+        'unknown',
+        'unknown',
+        'error'
+      )
+      throw createError({
+        statusCode: 500,
+        statusMessage: 'An error occurred processing your request'
+      })
+    })
+    return true
   } catch (error) {
-    await auditLogger(email, 'resetPasswordRequest', String((error as Error).message), 'unknown', 'unknown', 'error')
+    await auditLogger('unknown', 'resetPasswordRequest', String((error as Error).message), 'unknown', 'unknown', 'error')
     throw createError({
-      statusCode: 400,
-      statusMessage: 'We will send a password reset link to the email address if it exists in our system.'
+      statusCode: 500,
+      statusMessage: 'An unexpected error occurred'
     })
   }
-
-  await sendEmail(email, 'Password Reset Request', `Click <a href="${useRuntimeConfig().baseUrl}/reset-password/${resetToken}">here</a> to reset your password.`)
-  return true
 }
 
 export async function verifyResetToken(event: H3Event) {
@@ -452,7 +501,7 @@ export async function verifyResetToken(event: H3Event) {
     try {
       hashedToken = crypto.createHash('sha256').update(token).digest('hex')
     } catch (error) {
-      console.error('Token hashing error:', error)
+      await auditLogger('unknown', 'verifyResetToken', String((error as Error).message), 'unknown', 'unknown', 'error')
       throw createError({
         statusCode: 500,
         statusMessage: 'Failed to process reset token'
