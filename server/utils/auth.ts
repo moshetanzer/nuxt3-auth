@@ -297,7 +297,7 @@ export async function handleSession(event: H3Event): Promise<void> {
     } else {
       event.context.session = null
       event.context.user = null
-      await deleteSession(event, sessionId)
+      await deleteSession(event)
     }
   } catch (error) {
     console.error('Session handling error:', error)
@@ -316,7 +316,8 @@ export async function handleSession(event: H3Event): Promise<void> {
   }
 }
 
-export async function deleteSession(event: H3Event, sessionId: string) {
+export async function deleteSession(event: H3Event) {
+  const sessionId = event.context.session?.id
   try {
     const query = 'DELETE FROM sessions WHERE id = $1'
     await authDB.query(query, [sessionId])

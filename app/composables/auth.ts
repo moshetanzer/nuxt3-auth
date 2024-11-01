@@ -13,13 +13,15 @@ export const useUser = () => {
   const user = useState<User | null>('user', () => null)
   return user
 }
-export async function logOut() {
-  await $fetch('/api/auth/signout', {
-    method: 'POST'
-  })
-  const user = useUser()
-  user.value = null
-  await navigateTo('/')
+export const useLogOut = async () => {
+  try {
+    await $fetch('/api/auth/signout', { method: 'POST' })
+    const user = useUser()
+    user.value = null
+    navigateTo('/signin')
+  } catch (err) {
+    console.error(err)
+  }
 }
 
 export async function verifyToken(resetToken: string) {
@@ -39,3 +41,19 @@ export async function verifyToken(resetToken: string) {
     return false
   }
 }
+
+export const useSecureFetch = $fetch.create({
+  async onResponseError({ response }) {
+    if (response.status === 401) {
+      // Log out the user
+      const user = useUser()
+      user.value = null
+
+      // Use $fetch directly to call your logout API
+      await $fetch('/api/auth/logout', { method: 'POST' })
+
+      // Use navigateTo for navigation
+      await navigateTo('/login')
+    }
+  }
+})

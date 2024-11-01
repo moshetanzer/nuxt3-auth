@@ -1,11 +1,14 @@
 export default defineEventHandler(async (event) => {
   if (!event.context.session) {
-    throw createError({
-      statusCode: 401
-    })
+    return {
+      message: 'Logged out'
+    }
+    // throw createError({
+    //   statusCode: 401
+    // })
   }
 
-  await deleteSession(event, event.context.session.id)
+  await deleteSession(event)
 
   return {
     message: 'Logged out'

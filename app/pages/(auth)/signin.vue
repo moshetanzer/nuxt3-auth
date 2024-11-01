@@ -34,7 +34,10 @@ async function signIn() {
 <template>
   <div>
     <h1>Sign In</h1>
-    <form @submit.prevent="signIn" method="post">
+    <form
+      method="post"
+      @submit.prevent="signIn"
+    >
       <label for="email">Email</label>
       <input
         id="email"

@@ -15,7 +15,7 @@ const user = useUser()
         users
       </NuxtLink>
     </div>
-    <button @click="logOut()">
+    <button @click="useLogOut()">
       Sign Out
     </button>
   </div>
