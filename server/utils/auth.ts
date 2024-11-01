@@ -480,7 +480,6 @@ export const roleBasedAuth: EventHandler = (event: H3Event) => {
     const ip = getRequestIP(event) as string
     const userAgent = event.node.req.headers['user-agent'] as string
     auditLogger(event.context.user?.email ?? 'unknown', 'roleBasedAuth', 'Unauthorized', ip, userAgent, 'error')
-    console.log(userRoles)
     console.log('Unauthorized: Insufficient role')
     return event.node.res.writeHead(403).end('Unauthorized: Insufficient role')
   }

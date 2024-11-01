@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
   // Session Management
   await handleSession(event)
-  console.log('this is berfore role absed' + event.context.user?.role)
+  console.log('this is berfore role based ' + event.context.user?.role)
 
   // Role-Based Authorization
   await roleBasedAuth(event)

@@ -1,19 +1,3 @@
-// export const useSecureFetch = $fetch.create({
-//   async onResponseError({ response }) {
-//     if (response.status === 401) {
-//       // Log out the user
-//       const user = useUser()
-//       user.value = null
-
-//       // Use $fetch directly to call your logout API
-//       await $fetch('/api/auth/logout', { method: 'POST' })
-
-//       // Use navigateTo for navigation
-//       await navigateTo('/login')
-//     }
-//   }
-// })
-
 import type { UseFetchOptions } from 'nuxt/app'
 
 interface User {
