@@ -45,8 +45,8 @@ CREATE TABLE audit_logs (
     email character varying(100) NOT NULL,
     action character varying(100) NOT NULL,
     message text NOT NULL,
-    ip character varying(50) NOT NULL,
-    user_agent text NOT NULL,
+    ip character varying(50),
+    user_agent text,
     status character varying(20) NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );

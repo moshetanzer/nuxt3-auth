@@ -1,16 +1,14 @@
 export default defineNuxtPlugin((nuxtApp) => {
-  const api = $fetch.create({
-
+  const $secureFetch = $fetch.create({
     async onResponseError({ response }) {
       if (response.status === 401) {
-        await nuxtApp.runWithContext(() => navigateTo('/login'))
+        await nuxtApp.runWithContext(() => navigateTo('/signin'))
       }
     }
   })
-
   return {
     provide: {
-      secureFetch: api
+      secureFetch: $secureFetch
     }
   }
 })

@@ -6,8 +6,9 @@ definePageMeta({
   }
 })
 
-const { data, error } = await useFetch('/api/user/test', {
-  method: 'post'
+const { data, error } = await useSecureFetch('/api/user/test', {
+  server: true,
+  method: 'POST'
 })
 </script>
 
