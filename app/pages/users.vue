@@ -6,15 +6,17 @@ definePageMeta({
   }
 })
 
-const { data } = await useSecureFetch('/api/user/test', {
-  method: 'POST'
+const { data, error } = await useFetch('/api/user/test', {
+  method: 'post'
 })
 </script>
 
 <template>
   <div>
     <h1>Users</h1>
+
     {{ data }}
+    {{ error }}
     <NuxtLink to="/">
       Home
     </NuxtLink>

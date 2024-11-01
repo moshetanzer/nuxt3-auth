@@ -3,11 +3,17 @@ import { handleRateLimit, roleBasedAuth, emailVerification, handleSession } from
 
 export default defineEventHandler(async (event) => {
   // CSRF Protection
-  if (event.node.req.method !== 'GET') {
-    const originHeader = getHeader(event, 'Origin') ?? null
-    const hostHeader = getHeader(event, 'Host') ?? null
-    if (!originHeader || !hostHeader || !verifyRequestOrigin(originHeader, [hostHeader])) {
-      return event.node.res.writeHead(403).end('Invalid origin')
+  // only in production since for some reason on ssr fetch origin is null and host is localhost
+  if (process.env.NODE_ENV === 'production') {
+    if (event.node.req.method !== 'GET') {
+      const originHeader = getHeader(event, 'Origin') ?? null
+      // console.log('originHeader', originHeader)
+      const hostHeader = getHeader(event, 'Host') ?? null
+      // console.log('hostHeader', hostHeader)
+
+      if (!originHeader || !hostHeader || !verifyRequestOrigin(originHeader, [hostHeader])) {
+        return event.node.res.writeHead(403).end('Invalid origin')
+      }
     }
   }
   // Rate Limit
