@@ -44,7 +44,7 @@ export async function verifyToken(resetToken: string) {
   }
 }
 
-export function useSecureFetch<T>(
+export function useSecureFetchOld<T>(
   url: string | (() => string),
   options?: UseFetchOptions<T>
 ) {
@@ -52,4 +52,20 @@ export function useSecureFetch<T>(
     ...options,
     $fetch: useNuxtApp().$secureFetch
   })
+}
+
+export function useSecureFetch<T>(
+  url: string | (() => string),
+  options?: UseFetchOptions<T>
+) {
+  const nuxtApp = useNuxtApp()
+  const request = useRequestFetch()
+
+  return useAsyncData(async () => {
+    const resolvedUrl = typeof url === 'function' ? url() : url
+    return await request(resolvedUrl, {
+      ...options,
+      $fetch: nuxtApp.$secureFetch
+    })
+  }, options)
 }

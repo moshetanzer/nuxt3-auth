@@ -42,6 +42,8 @@ const ARGON2_CONFIG = {
   parallelism: 4
 }
 
+const RATE_LIMIT = 100
+const RATE_LIMIT_WINDOW = 60
 const MAX_FAILED_ATTEMPTS = useRuntimeConfig().maxFailedAttempts || 5 as number
 const SESSION_TOTAL_DURATION = useRuntimeConfig().sessionTotalDuration || 30 * 24 * 60 * 60 * 1000 as number// 30 days total
 const SESSION_SLIDING_WINDOW = useRuntimeConfig().sessionSlidingWindow || 15 * 24 * 60 * 60 * 1000 as number // 15 days sliding window
@@ -426,9 +428,6 @@ export async function cleanupExpiredSessions() {
 }
 
 export async function handleRateLimit(event: H3Event): Promise<void> {
-  const RATE_LIMIT = 100
-  const RATE_LIMIT_WINDOW = 60
-
   const storage = useStorage()
   const ip = getClientIP(event)
   const userAgent = event.node.req.headers['user-agent'] as string
